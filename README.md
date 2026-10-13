@@ -15,7 +15,7 @@ Phone numbers and emails are mapped in [Workers KV](https://developers.cloudflar
 
 | Key | Value |
 | ------------- | ------------- |
-| route:+16083152847  | {"mode":"forward_email","email":"staff@javisind.com"}  |
+| route:+11234567890  | {"mode":"forward_email","email":"jdoe@acme.com"}  |
 
 
 `cachedNumberToEmail` is scoped to the module
