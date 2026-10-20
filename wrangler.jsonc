@@ -1,20 +1,22 @@
-/**
- * For more details on how to configure Wrangler, refer to:
- * https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
+	/**
+	 * For more details on how to configure Wrangler, refer to:
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/
+	 *
+	 * KV namespace binding is intentionally NOT declared here so this file works
+	 * as a clean template for the "Deploy to Cloudflare" button (a hardcoded
+	 * namespace id would fail to deploy for anyone else, since ids are
+	 * account-specific). After deploying, create a Workers KV namespace in the
+	 * Cloudflare dashboard (Workers & Pages → KV → Create namespace) and bind it
+	 * to this Worker under Settings → Bindings → KV Namespace with the variable
+	 * name `NUMBER_TO_EMAIL`. Dashboard-managed bindings persist across
+	 * `wrangler deploy`. See the README "First-time setup" section.
+	 */
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "text-to-email",
 	"main": "src/index.js",
 	"compatibility_date": "2025-12-05",
 	"observability": {
 		"enabled": true
-	},
-	"kv_namespaces": [
-		{
-			"binding": "NUMBER_TO_EMAIL",
-			"id": "e89c93a640704b018faea58364544fa5",
-			"remote": true
-		}
-	],
+	}
 }

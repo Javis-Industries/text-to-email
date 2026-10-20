@@ -82,6 +82,37 @@ is processed unchecked) so the Worker keeps working during a gradual rollout —
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
 
+## First-time setup
+
+The deploy button provisions the Worker, but a few account-specific things
+must be configured before it works. Follow in order:
+
+1. **Deploy** — click the button above, connect your Cloudflare account, and
+   deploy. This creates the Worker but it won't function until the steps below.
+
+2. **Create + bind the KV namespace** — the Worker routes inbound messages
+   through a Workers KV namespace. The `wrangler.jsonc` intentionally does not
+   declare it (a namespace id is account-specific and would break the deploy
+   button for others). In the Cloudflare dashboard: Workers & Pages → KV →
+   Create namespace (any name). Then bind it to your Worker under the Worker's
+   Settings → Bindings → Add → KV Namespace, using the variable name
+   `NUMBER_TO_EMAIL`. Dashboard bindings persist across `wrangler deploy`.
+
+3. **Set the secrets** — under the Worker's Settings → Variables and Secrets,
+   add the variables from the table above. At minimum: the Mailgun triple
+   (`MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `FROM_EMAIL`). Add the Telnyx and/or
+   Twilio credentials for whichever carriers you use, including
+   `TELNYX_PUBLIC_KEY` / `TWILIO_AUTH_TOKEN` for webhook signature validation
+   (see that section — strongly recommended).
+
+4. **Point your carrier webhooks** — in each carrier's console, set the inbound
+   webhook URL to `https://<worker>.<your-subdomain>.workers.dev/telnyx` (or
+   `/twilio`).
+
+5. **Add routes** — put a KV entry under the key `route:<E.164>` (e.g.
+   `route:+11234567890`) for each number, with a JSON value selecting
+   `forward_email` or `auto_reply` (see "Mapping Numbers to Email" below).
+
 ## Mapping Numbers to Email
 
 Phone numbers and emails are mapped in [Workers KV](https://developers.cloudflare.com/kv/).
