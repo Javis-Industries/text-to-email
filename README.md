@@ -56,13 +56,25 @@ if using `auto_reply`).
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
 
 ## Mapping Numbers to Email
-Phone numbers and emails are mapped in [Workers KV](https://developers.cloudflare.com/kv/), following the format below. The script searches for the sending number in the KV namespace and extracts the email to forward the message to.
 
-| Key | Value |
-| ------------- | ------------- |
-| route:+11234567890  | {"mode":"forward_email","email":"jdoe@acme.com"}  |
+Phone numbers and emails are mapped in [Workers KV](https://developers.cloudflare.com/kv/).
+Each inbound message is looked up by its destination number (the number that
+received the SMS/MMS) under the key `route:<E.164>`, e.g. `route:+11234567890`.
+The route value is JSON describing what to do with messages to that number.
 
+Two route modes are supported:
 
-`cachedNumberToEmail` is scoped to the module
+| Mode             | Value                                            | Behavior                                                                 |
+| ---------------- | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `forward_email`  | `{"mode":"forward_email","email":"jdoe@acme.com"}`| Forward the message (with any MMS images) to `email` via Mailgun.         |
+| `auto_reply`     | `{"mode":"auto_reply","reply_text":"Thanks!"}`    | Reply to the sender with `reply_text` via the carrier that delivered it. |
 
-`getNumberToEmailMap()` returns immediately after the first call because it is scoped to the module. It will return the already-parsed JSON
+Email forwarding is carrier-independent (Mailgun only). Auto-replies are sent
+back through the carrier that delivered the inbound message — the receiving
+number's webhook path (`/` or `/telnyx` for Telnyx, `/twilio` for Twilio) selects
+which carrier sends the reply, so no route-level carrier config is needed.
+
+| Key                  | Value                                                |
+| -------------------- | ---------------------------------------------------- |
+| `route:+11234567890` | `{"mode":"forward_email","email":"jdoe@acme.com"}`   |
+| `route:+18005551212` | `{"mode":"auto_reply","reply_text":"Leave a message"}`|
