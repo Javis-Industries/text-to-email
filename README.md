@@ -33,9 +33,10 @@ Set these as Worker secrets (or in `.dev.vars` for local dev, copied from
 | `MAILGUN_API_KEY`   | Mailgun email send (both carriers) |
 | `MAILGUN_DOMAIN`    | Mailgun email send               |
 | `FROM_EMAIL`        | Mailgun email send               |
-| `TELNYX_API_KEY`    | Telnyx auto-replies              |
-| `TWILIO_ACCOUNT_SID`| Twilio auto-replies              |
-| `TWILIO_AUTH_TOKEN` | Twilio auto-replies              |
+| `TELNYX_API_KEY`      | Telnyx auto-replies              |
+| `TWILIO_ACCOUNT_SID` | Twilio (auto-replies + media fetch) |
+| `TWILIO_API_KEY_SID`  | Twilio (auto-replies + media fetch) |
+| `TWILIO_API_KEY_SECRET` | Twilio (auto-replies + media fetch) |
 
 The Twilio variables are required when you have numbers on Twilio that use
 `auto_reply` routes, and also when a `forward_email` route may receive MMS
@@ -43,6 +44,14 @@ images: Twilio media URLs require HTTP Basic auth, so the Worker needs the
 Twilio credentials to fetch and attach incoming images. Telnyx media URLs are
 publicly accessible, so no carrier credentials are needed to forward images
 from Telnyx.
+
+Twilio authentication uses an **API Key** (SID + secret), not the account Auth
+Token, so the credential can be a Restricted API Key scoped to only what this
+Worker needs: read the Messaging Media subresource (image forwarding) and, if
+you also use `auto_reply` routes, create/send Messages. Create a Restricted key
+in the Twilio Console under Develop → Tools → API keys & tokens, granting the
+Messaging read permission (for media) and the Messaging send permission (only
+if using `auto_reply`).
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
 

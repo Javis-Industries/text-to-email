@@ -232,10 +232,17 @@ async function sendTelnyxReply(env, fromNumber, toNumber, replyText) {
   }
 }
 
-// Reply via Twilio. Auth is Account SID + Auth Token as HTTP Basic.
+// Reply via Twilio. Auth is an API Key (SID + secret) as HTTP Basic; the
+// Account SID still travels in the request URL path.
 async function sendTwilioReply(env, fromNumber, toNumber, replyText) {
-  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) {
-    console.error("Missing TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN for auto_reply");
+  if (
+    !env.TWILIO_ACCOUNT_SID ||
+    !env.TWILIO_API_KEY_SID ||
+    !env.TWILIO_API_KEY_SECRET
+  ) {
+    console.error(
+      "Missing TWILIO_ACCOUNT_SID/TWILIO_API_KEY_SID/TWILIO_API_KEY_SECRET for auto_reply",
+    );
     return;
   }
   const twilioResponse = await fetch(
@@ -244,7 +251,7 @@ async function sendTwilioReply(env, fromNumber, toNumber, replyText) {
       method: "POST",
       headers: {
         Authorization: `Basic ${btoa(
-          `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`,
+          `${env.TWILIO_API_KEY_SID}:${env.TWILIO_API_KEY_SECRET}`,
         )}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
@@ -282,12 +289,15 @@ async function sendReply(env, message, replyText) {
 // the normalized media list.
 async function processMedia(media, provider, env) {
   let mediaHtml = "";
-  // Twilio media URLs require HTTP Basic auth (Account SID + Auth Token) since
-  // July 2023; a plain fetch returns 401 and the image is silently dropped.
+  // Twilio media URLs require HTTP Basic auth since July 2023; a plain fetch
+  // returns 401 and the image is silently dropped. Authenticate with a Twilio
+  // API Key (SID + secret) — preferred over the account Auth Token so the
+  // credential can be a Restricted key scoped to just media read. The Account
+  // SID is not part of Basic auth here; the MediaUrl already embeds it.
   // Telnyx media URLs are publicly accessible, so no auth is needed.
   const twilioAuth =
-    provider === "twilio" && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
-      ? `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`
+    provider === "twilio" && env.TWILIO_API_KEY_SID && env.TWILIO_API_KEY_SECRET
+      ? `Basic ${btoa(`${env.TWILIO_API_KEY_SID}:${env.TWILIO_API_KEY_SECRET}`)}`
       : null;
   for (const item of media) {
     if (!item.url) continue;
