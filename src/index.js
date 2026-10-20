@@ -437,13 +437,12 @@ export default {
     }
 
     // Route by path so each carrier dashboard points at its own webhook URL.
-    // "/" stays Telnyx for backward compatibility with existing deployments.
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, ""); // trim trailing slash
 
     let message;
     try {
-      if (path === "" || path === "/telnyx") {
+      if (path === "/telnyx") {
         // Telnyx: read raw JSON body once (needed for signature verification),
         // verify the Ed25519 signature, then parse.
         const rawBody = await request.text();

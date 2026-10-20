@@ -18,10 +18,8 @@ Point each carrier's inbound webhook at its own path:
 
 | Carrier | Webhook URL                       |
 | ------- | --------------------------------- |
-| Telnyx  | `https://<worker>/` (or `/telnyx`) |
+| Telnyx  | `https://<worker>/telnyx`          |
 | Twilio  | `https://<worker>/twilio`         |
-
-`/` remains Telnyx for backward compatibility with existing deployments.
 
 ## Environment variables
 
@@ -66,8 +64,9 @@ is processed unchecked) so the Worker keeps working during a gradual rollout —
 
 - **Telnyx** signs webhooks with Ed25519 public-key cryptography. The signature
   covers `<timestamp>|<rawBody>`. Verification uses only Telnyx's **public
-  key** (Mission Control → API Keys → Public Key), stored as `TELNYX_PUBLIC_KEY`
-  — a public key can only verify, never sign, so leaking it is harmless.
+  key** (Mission Control Portal → Account Settings → Keys & Credentials →
+  Public Key sub-tab), stored as `TELNYX_PUBLIC_KEY` — a public key can only
+  verify, never sign, so leaking it is harmless.
 - **Twilio** signs webhooks with HMAC-SHA1 using the account **Auth Token** as
   the key, sent in the `X-Twilio-Signature` header. The Auth Token is required
   here specifically because Twilio signs with it — an API Key secret can't
