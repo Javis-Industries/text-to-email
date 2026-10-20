@@ -67,9 +67,9 @@ function normalizePhoneNumber(phoneNumber) {
 // ---------------------------------------------------------------------------
 
 // Telnyx webhook: JSON body, event lives under data.event_type / data.payload.
-// Only inbound "message.received" events are actionable.
-async function parseTelnyxInbound(request) {
-  const payload = await request.json();
+// Only inbound "message.received" events are actionable. The payload is passed
+// in already-parsed (the raw body was read once for signature verification).
+function parseTelnyxInbound(payload) {
   const data = payload.data;
   if (
     !data ||
@@ -102,9 +102,9 @@ async function parseTelnyxInbound(request) {
 }
 
 // Twilio webhook: form-encoded body. Actionable messages are simply inbound
-// messages; Twilio has no event-type envelope to filter on.
-async function parseTwilioInbound(request) {
-  const form = await request.formData();
+// messages; Twilio has no event-type envelope to filter on. The form is passed
+// in already-parsed (the body was read once for signature verification).
+function parseTwilioInbound(form) {
 
   // Twilio lists media as MediaUrl0..N with parallel MediaContentType0..N.
   const media = [];
@@ -127,6 +127,100 @@ async function parseTwilioInbound(request) {
     // Twilio doesn't send a server timestamp; use receipt time on the Worker.
     occurredAt: new Date().toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Webhook signature verification — one verifier per carrier
+// ---------------------------------------------------------------------------
+
+// Verify a Telnyx webhook's Ed25519 signature. Telnyx signs
+// `<timestamp>|<rawBody>` with its account private key; the matching public key
+// (base64, from Mission Control → API Keys → Public Key) is stored as
+// TELNYX_PUBLIC_KEY. Public-key crypto means no shared secret: the public key
+// can't be used to sign anything, only to verify.
+//
+// Returns true when the signature is valid. When TELNYX_PUBLIC_KEY is not
+// configured, verification is skipped (returns true) so deployments that haven't
+// set the key keep working — set the key to enable protection.
+async function verifyTelnyxSignature(request, rawBody, publicKeyBase64) {
+  if (!publicKeyBase64) return true;
+  const signature = request.headers.get("telnyx-signature-ed25519");
+  const timestamp = request.headers.get("telnyx-timestamp");
+  if (!signature || !timestamp) {
+    console.error("Telnyx webhook missing signature/timestamp headers");
+    return false;
+  }
+  try {
+    const signedPayload = new TextEncoder().encode(`${timestamp}|${rawBody}`);
+    const sigBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+    const pubKeyBytes = Uint8Array.from(atob(publicKeyBase64), (c) =>
+      c.charCodeAt(0),
+    );
+    const key = await crypto.subtle.importKey(
+      "raw",
+      pubKeyBytes,
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    return await crypto.subtle.verify("Ed25519", key, sigBytes, signedPayload);
+  } catch (error) {
+    console.error("Telnyx signature verification error:", error);
+    return false;
+  }
+}
+
+// Verify a Twilio webhook's HMAC-SHA1 signature. Twilio signs the full webhook
+// URL with all POST parameters (sorted by name, name+value appended with no
+// delimiter) using the account Auth Token as the HMAC key, base64-encoding the
+// result into X-Twilio-Signature.
+//
+// The Auth Token is required here specifically because Twilio signs with it —
+// an API Key secret cannot validate Twilio webhook signatures. The Auth Token
+// is used ONLY for this in-memory HMAC comparison and is never sent on any
+// outbound request; the API Key (TWILIO_API_KEY_SID/SECRET) still handles all
+// outbound media fetches and replies, keeping the Auth Token off the wire.
+//
+// Returns true when the signature is valid. When TWILIO_AUTH_TOKEN is not
+// configured, verification is skipped (returns true) so deployments that haven't
+// set the token keep working — set the token to enable protection.
+async function verifyTwilioSignature(request, formData, authToken) {
+  if (!authToken) return true;
+  const signature = request.headers.get("X-Twilio-Signature");
+  if (!signature) {
+    console.error("Twilio webhook missing X-Twilio-Signature header");
+    return false;
+  }
+  try {
+    // Signature is over the full URL + sorted POST params (name+value, no delim).
+    let data = request.url;
+    const params = {};
+    for (const [key, value] of formData.entries()) {
+      params[key] = value;
+    }
+    for (const key of Object.keys(params).sort()) {
+      data += key + params[key];
+    }
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(authToken),
+      { name: "HMAC", hash: "SHA-1" },
+      false,
+      ["sign"],
+    );
+    const mac = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(data),
+    );
+    const expected = btoa(
+      String.fromCharCode(...new Uint8Array(mac)),
+    );
+    return expected === signature;
+  } catch (error) {
+    console.error("Twilio signature verification error:", error);
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -350,9 +444,33 @@ export default {
     let message;
     try {
       if (path === "" || path === "/telnyx") {
-        message = await parseTelnyxInbound(request);
+        // Telnyx: read raw JSON body once (needed for signature verification),
+        // verify the Ed25519 signature, then parse.
+        const rawBody = await request.text();
+        const verified = await verifyTelnyxSignature(
+          request,
+          rawBody,
+          env.TELNYX_PUBLIC_KEY,
+        );
+        if (!verified) {
+          console.error("Rejected Telnyx webhook: invalid signature");
+          return new Response("Invalid signature", { status: 403 });
+        }
+        message = parseTelnyxInbound(JSON.parse(rawBody));
       } else if (path === "/twilio") {
-        message = await parseTwilioInbound(request);
+        // Twilio: read form body once, verify the HMAC-SHA1 signature against
+        // the Auth Token, then parse.
+        const form = await request.formData();
+        const verified = await verifyTwilioSignature(
+          request,
+          form,
+          env.TWILIO_AUTH_TOKEN,
+        );
+        if (!verified) {
+          console.error("Rejected Twilio webhook: invalid signature");
+          return new Response("Invalid signature", { status: 403 });
+        }
+        message = parseTwilioInbound(form);
       } else {
         return new Response("Not found", { status: 404 });
       }

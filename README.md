@@ -34,9 +34,11 @@ Set these as Worker secrets (or in `.dev.vars` for local dev, copied from
 | `MAILGUN_DOMAIN`    | Mailgun email send               |
 | `FROM_EMAIL`        | Mailgun email send               |
 | `TELNYX_API_KEY`      | Telnyx auto-replies              |
+| `TELNYX_PUBLIC_KEY` | Telnyx webhook signature validation |
 | `TWILIO_ACCOUNT_SID` | Twilio (auto-replies + media fetch) |
 | `TWILIO_API_KEY_SID`  | Twilio (auto-replies + media fetch) |
 | `TWILIO_API_KEY_SECRET` | Twilio (auto-replies + media fetch) |
+| `TWILIO_AUTH_TOKEN` | Twilio webhook signature validation |
 
 The Twilio variables are required when you have numbers on Twilio that use
 `auto_reply` routes, and also when a `forward_email` route may receive MMS
@@ -45,13 +47,39 @@ Twilio credentials to fetch and attach incoming images. Telnyx media URLs are
 publicly accessible, so no carrier credentials are needed to forward images
 from Telnyx.
 
-Twilio authentication uses an **API Key** (SID + secret), not the account Auth
-Token, so the credential can be a Restricted API Key scoped to only what this
-Worker needs: read the Messaging Media subresource (image forwarding) and, if
-you also use `auto_reply` routes, create/send Messages. Create a Restricted key
-in the Twilio Console under Develop → Tools → API keys & tokens, granting the
-Messaging read permission (for media) and the Messaging send permission (only
-if using `auto_reply`).
+Twilio API calls (media fetch + replies) authenticate with an **API Key**
+(SID + secret), not the account Auth Token, so the credential can be a
+Restricted API Key scoped to only what this Worker needs: read the Messaging
+Media subresource (image forwarding) and, if you also use `auto_reply` routes,
+create/send Messages. Create a Restricted key in the Twilio Console under
+Develop → Tools → API keys & tokens, granting the Messaging read permission
+(for media) and the Messaging send permission (only if using `auto_reply`).
+
+## Webhook signature validation
+
+The Worker verifies that each inbound webhook genuinely came from the carrier
+before acting on it, preventing forged requests from triggering unwanted email
+or paid auto-replies. Validation is enabled by setting the carrier's
+verification secret; if the secret is unset, validation is skipped (the request
+is processed unchecked) so the Worker keeps working during a gradual rollout —
+**set both to be protected.**
+
+- **Telnyx** signs webhooks with Ed25519 public-key cryptography. The signature
+  covers `<timestamp>|<rawBody>`. Verification uses only Telnyx's **public
+  key** (Mission Control → API Keys → Public Key), stored as `TELNYX_PUBLIC_KEY`
+  — a public key can only verify, never sign, so leaking it is harmless.
+- **Twilio** signs webhooks with HMAC-SHA1 using the account **Auth Token** as
+  the key, sent in the `X-Twilio-Signature` header. The Auth Token is required
+  here specifically because Twilio signs with it — an API Key secret can't
+  validate Twilio signatures. Store it as `TWILIO_AUTH_TOKEN`.
+
+  The Auth Token is used **only** for this in-memory HMAC comparison and is
+  never sent on any outbound request; the API Key handles all outbound Twilio
+  API calls. This keeps the Auth Token off the network while still allowing
+  signature validation. Note the residual risk: unlike the API Key, the Auth
+  Token grants full account access if the Worker secret store is compromised.
+  The mitigation is that it never leaves the Worker as an outbound credential —
+  it stays in memory for the HMAC computation only.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
 
