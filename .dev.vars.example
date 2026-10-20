@@ -1,4 +1,11 @@
+# Mailgun
 MAILGUN_API_KEY=your-api-key-here
 MAILGUN_DOMAIN=mg.example.com
 FROM_EMAIL=jane@example.com
+
+# Telnyx
 TELNYX_API_KEY=your-telnyx-api-key-here
+
+# Twilio
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your-twilio-auth-token-here
