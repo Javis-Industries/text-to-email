@@ -37,9 +37,12 @@ Set these as Worker secrets (or in `.dev.vars` for local dev, copied from
 | `TWILIO_ACCOUNT_SID`| Twilio auto-replies              |
 | `TWILIO_AUTH_TOKEN` | Twilio auto-replies              |
 
-The Twilio variables are only required when you have numbers on Twilio that
-use `auto_reply` routes. `forward_email` routes send email via Mailgun
-regardless of carrier and don't need the Twilio credentials.
+The Twilio variables are required when you have numbers on Twilio that use
+`auto_reply` routes, and also when a `forward_email` route may receive MMS
+images: Twilio media URLs require HTTP Basic auth, so the Worker needs the
+Twilio credentials to fetch and attach incoming images. Telnyx media URLs are
+publicly accessible, so no carrier credentials are needed to forward images
+from Telnyx.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
 

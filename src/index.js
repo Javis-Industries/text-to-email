@@ -280,8 +280,15 @@ async function sendReply(env, message, replyText) {
 // Fetch each image attachment and convert it to a base64 data URI for inline
 // embedding. Non-image attachments are skipped. Carrier-agnostic: works off
 // the normalized media list.
-async function processMedia(media) {
+async function processMedia(media, provider, env) {
   let mediaHtml = "";
+  // Twilio media URLs require HTTP Basic auth (Account SID + Auth Token) since
+  // July 2023; a plain fetch returns 401 and the image is silently dropped.
+  // Telnyx media URLs are publicly accessible, so no auth is needed.
+  const twilioAuth =
+    provider === "twilio" && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
+      ? `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`
+      : null;
   for (const item of media) {
     if (!item.url) continue;
     // Prefer the content type from the webhook; when absent (Twilio sometimes
@@ -289,7 +296,10 @@ async function processMedia(media) {
     const contentType = item.contentType || "";
     if (contentType && !contentType.startsWith("image/")) continue;
     try {
-      const response = await fetch(item.url);
+      const response = await fetch(
+        item.url,
+        twilioAuth ? { headers: { Authorization: twilioAuth } } : {},
+      );
       if (!response.ok) continue;
       const resolvedType =
         contentType || response.headers.get("Content-Type") || "";
@@ -382,7 +392,11 @@ export default {
         timeZone: "America/Chicago",
         timeZoneName: "short",
       });
-      const mediaHtml = await processMedia(message.media);
+      const mediaHtml = await processMedia(
+        message.media,
+        message.provider,
+        env,
+      );
       await sendMailgunEmail(
         env,
         route.email,
